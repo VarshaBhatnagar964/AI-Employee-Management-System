@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Employee Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>body{background:#eef2f7}</style>
+</head>
+<body>
+<div class="container mt-3">
+    <h3 class="text-center text-primary fw-bold">Employee Management System</h3>
+    <p class="text-center text-muted">AI Enabled Employee Management Platform</p>
+    <div class="text-center mb-3">
+        <span class="badge bg-primary">Total Employees: <span id="totalBadge">0</span></span>
+        <span class="badge bg-success">AI Enabled</span>
+        <span class="badge bg-warning text-dark">NLP Search</span>
+    </div>
+
+    <!-- 4 CARDS -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="bg-primary text-white p-3 rounded"><small>Total Employees</small><h3 id="totalEmp">0</h3></div></div>
+        <div class="col-md-3"><div class="bg-success text-white p-3 rounded"><small>Total Salary</small><h3 id="totalSal">0</h3></div></div>
+        <div class="col-md-3"><div class="bg-danger text-white p-3 rounded" style="background:#ef7a7a!important"><small>Avg Salary</small><h3 id="avgSal">0</h3></div></div>
+        <div class="col-md-3"><div class="bg-warning text-white p-3 rounded"><small>Departments</small><h3 id="totalDept">0</h3></div></div>
+    </div>
+
+    <!-- CHART -->
+    <div class="row bg-white p-3 rounded mb-3">
+        <div class="col-md-6"><canvas id="deptChart"></canvas></div>
+        <div class="col-md-6"><h6>Department Wise</h6><div id="deptList"></div></div>
+    </div>
+
+    <!-- NLP SEARCH -->
+    <div class="bg-white p-3 rounded mb-3">
+        <h6>AI Powered Natural Language Search</h6>
+        <input id="nlpSearch" class="form-control" placeholder="e.g. Show me all HR employees">
+        <small class="text-muted">e.g. Show me all HR employees, employees with high salary</small>
+    </div>
+
+    <!-- ADD FORM -->
+    <div class="bg-white p-3 rounded mb-3">
+        <h5>Add New Employee</h5>
+        <div class="row g-2 mt-2">
+            <div class="col-md-4"><input id="name" class="form-control" placeholder="Full Name"></div>
+            <div class="col-md-4"><input id="email" class="form-control" placeholder="Email Address"></div>
+            <div class="col-md-4"><input id="dept" class="form-control" placeholder="Department"></div>
+            <div class="col-md-3"><input id="phone" class="form-control" placeholder="Phone Number"></div>
+            <div class="col-md-3"><input id="salary" type="number" class="form-control" placeholder="Salary"></div>
+            <div class="col-md-3"><input id="joinDate" type="date" class="form-control"></div>
+            <div class="col-md-3"><input id="address" class="form-control" placeholder="Full Address"></div>
+        </div>
+        <button onclick="addEmployee()" class="btn btn-primary mt-3">Add Employee</button>
+    </div>
+
+    <!-- ALL EMPLOYEES TABLE - YE WALA AAPKI PHOTO WALA HAI -->
+    <div class="bg-white p-3 rounded">
+        <h6>All Employees</h6>
+        <table class="table table-bordered mt-2">
+            <thead class="table-dark"><tr><th>Name</th><th>Email</th><th>Department</th><th>Salary</th><th>Action</th></tr></thead>
+            <tbody id="empBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let allData=[];
+    let myChart=null;
+    function load(){
+        fetch('/api/employees').then(r=>r.json()).then(data=>{
+            allData=data;
+            document.getElementById('totalBadge').innerText=data.length;
+            document.getElementById('totalEmp').innerText=data.length;
+            let total=0, deptMap={};
+            data.forEach(e=>{ total+=Number(e.salary); let d=e.department||e.dept; deptMap[d]=(deptMap[d]||0)+1; });
+            document.getElementById('totalSal').innerText=total;
+            document.getElementById('avgSal').innerText=data.length?Math.round(total/data.length):0;
+            document.getElementById('totalDept').innerText=Object.keys(deptMap).length;
+
+            let tbody=document.getElementById('empBody'); tbody.innerHTML="";
+            data.forEach(e=>{ tbody.innerHTML+=`<tr><td>${e.name}</td><td>${e.email}</td><td>${e.department||e.dept}</td><td>${e.salary}</td><td><button class="btn btn-sm btn-danger" onclick="delEmp(${e.id})">Delete</button></td></tr>`; });
+
+            document.getElementById('deptList').innerHTML="";
+            for(let d in deptMap){ document.getElementById('deptList').innerHTML+=`<div class="mb-2"><small>${d} - ${deptMap[d]}</small><div class="progress"><div class="progress-bar" style="width:${deptMap[d]/data.length*100}%"></div></div></div>`; }
+
+            if(myChart) myChart.destroy();
+            myChart=new Chart(document.getElementById('deptChart'),{type:'doughnut',data:{labels:Object.keys(deptMap),datasets:[{data:Object.values(deptMap),backgroundColor:['#3b82f6','#22c55e','#ff7a8a','#f59e0b','#8b5cf6']}]}});
+        });
+    }
+    function addEmployee(){
+        let emp={name:name.value,email:email.value,department:dept.value,phone:phone.value,salary:salary.value,joiningDate:joinDate.value,address:address.value};
+        fetch('/api/employees',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(emp)}).then(()=>load());
+    }
+    function delEmp(id){ fetch('/api/employees/'+id,{method:'DELETE'}).then(()=>load()); }
+    document.getElementById('nlpSearch').addEventListener('input',function(){
+        let q=this.value.toLowerCase(); if(!q){load(); return;}
+        let f=allData.filter(e=>{ let d=(e.department||e.dept).toLowerCase(); if(q.includes('hr')) return d.includes('hr'); if(q.includes('developer')) return d.includes('developer'); if(q.includes('high salary')) return e.salary>55000; return (e.name+e.email+d).toLowerCase().includes(q); });
+        let tbody=document.getElementById('empBody'); tbody.innerHTML=""; f.forEach(e=>{ tbody.innerHTML+=`<tr><td>${e.name}</td><td>${e.email}</td><td>${e.department||e.dept}</td><td>${e.salary}</td><td><button class="btn btn-sm btn-danger" onclick="delEmp(${e.id})">Delete</button></td></tr>`; });
+    });
+    load();
+</script>
+</body>
+</html>
